@@ -71,12 +71,12 @@ def model(train_x, train_y, test_x, test_y, conv_layer, pool_strides, ksize, ful
     :param conv_layer: the convolution layer each convolution kernel with shape of(height, weight, in_channels, out_channels)
     :param pool_strides: the pool layer strides each max-pooling with shape(1, strides, strides, 1)
     :param ksize: the pool layer filters size each filters with size of(1,
-    :param fully_neuron:
-    :param learning_rate:
-    :param epochs:
-    :param batch_size:
-    :param print_cost:
-    :param plot_cost:
+    :param fully_neuron: the number of neuron of the last fully layer
+    :param learning_rate: the learning rate
+    :param epochs: the number of iteration
+    :param batch_size: the batch size
+    :param print_cost: whether print the cost after 10 iteration
+    :param plot_cost: whether plot the figure of cost
     :return:
     """
     ops.reset_default_graph()
