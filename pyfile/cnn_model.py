@@ -1,5 +1,7 @@
 import os
 import math
+
+import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -61,7 +63,7 @@ def compute_cost(y_hat, Y):
     return cost
 
 
-def model(train_x, train_y, test_x, test_y, conv_layer, pool_strides, ksize, fully_neuron, learning_rate=0.001, epochs=1000, batch_size=64, print_cost=True, plot_cost=True):
+def model(train_x, train_y, test_x, test_y, conv_layer, pool_strides, ksize, classes, learning_rate=0.001, epochs=1000, batch_size=64, print_cost=True, plot_cost=True):
     """
     build the convolution network
     :param train_x: train data with shape of (number_samples,heights,weights, channels)
@@ -91,7 +93,7 @@ def model(train_x, train_y, test_x, test_y, conv_layer, pool_strides, ksize, ful
     Y = tf.placeholder(tf.float32, [None, n_y], name='output_y')
 
     conv_kernels = initialize_convolution_kernel(conv_layer)
-    y_hat = forward_propagation(X, conv_kernels, pool_strides, ksize, fully_neuron)
+    y_hat = forward_propagation(X, conv_kernels, pool_strides, ksize, classes)
 
     cost = compute_cost(y_hat, Y)
     optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate)
@@ -99,7 +101,7 @@ def model(train_x, train_y, test_x, test_y, conv_layer, pool_strides, ksize, ful
 
     init_op = tf.compat.v1.global_variables_initializer()
 
-    with tf.compat.v1.Session as sess:
+    with tf.compat.v1.Session() as sess:
         sess.run(init_op)
 
         for epoch in range(epochs):
@@ -131,6 +133,8 @@ def model(train_x, train_y, test_x, test_y, conv_layer, pool_strides, ksize, ful
             plt.title('Learning rate = ' + str(learning_rate))
             plt.show()
 
+        tf.saved_model.simple_save(sess, './model', inputs={'input_x': X}, outputs={'output_y': y_hat})
+
 
 def mini_batch(X, Y, batch_size):
     """
@@ -145,8 +149,8 @@ def mini_batch(X, Y, batch_size):
 
     # Shuffle (X, Y)
     permutation = list(np.random.permutation(m))
-    shuffled_x = X[:, permutation]
-    shuffled_y = Y[:, permutation]
+    shuffled_x = X[permutation, :, :, :]
+    shuffled_y = Y[permutation, :]
 
     num_batches = math.floor(m / batch_size)
     for k in range(0, num_batches):
@@ -162,6 +166,67 @@ def mini_batch(X, Y, batch_size):
     return batches
 
 
+def read_data_form_h5py(train_path, test_path):
+    """
+    read data from the file of format .h5
+    :param train_path: train file path
+    :param test_path:  test file path
+    :return: train and test data include labels, and classes
+    """
+    train_data = h5py.File(train_path, 'r')
+    train_x = np.array(train_data['train_set_x'][:])
+    train_y = np.array(train_data['train_set_y'][:])
+
+    test_data = h5py.File(test_path, 'r')
+    test_x = np.array(test_data['test_set_x'][:])
+    test_y = np.array(test_data['test_set_y'][:])
+
+    classes = np.array(test_data['list_classes'][:])
+
+    train_y = train_y.reshape((1, train_y.shape[0]))
+    test_y = test_y.reshape((1, test_y.shape[0]))
+
+    return train_x, train_y, test_x, test_y, classes
+
+
+def convert_to_one_hot(Y, classes):
+    """
+    convert label to one hot encode
+    :param Y: the label
+    :param classes: the number of class
+    :return: one hot encoded label
+    """
+    Y = np.eye(classes)[Y.reshape(-1)].T
+    return Y
+
+
 if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
-    pass
+    train_path = './datasets/train_signs.h5'
+    test_path = './datasets/test_signs.h5'
+
+    train_x, train_y, test_x, test_y, classes = read_data_form_h5py(train_path, test_path)
+
+    classes = classes.shape[0]
+
+    train_y = convert_to_one_hot(train_y, classes).T
+    test_y = convert_to_one_hot(test_y, classes).T
+
+    train_x = train_x / 255
+    test_x = test_x / 255
+
+    print('number of training examples = ' + str(train_x.shape[0]))
+    print('number of test examples = ' + str(test_x.shape[0]))
+    print('X_train shape: ' + str(train_x.shape))
+    print('Y_train shape: ' + str(train_y.shape))
+    print('X_test shape: ' + str(test_x.shape))
+    print('Y_test shape: ' + str(test_y.shape))
+
+    conv_layers = {'W1': [3, 3, 3, 8],  # [height, weight, in_channels, out_channels]
+                   'W2': [3, 3, 8, 16],
+                   'W3': [3, 3, 16, 64]}
+
+    pool_stride =[[1, 3, 3, 1], [1, 4, 4, 1], [1, 2, 2, 1]]
+    ksize = [[1, 3, 3, 1], [1, 4, 4, 1], [1, 2, 2, 1]]
+
+    model(train_x, train_y, test_x, test_y, conv_layers, pool_stride, ksize, classes, learning_rate=0.0001, epochs=10)
